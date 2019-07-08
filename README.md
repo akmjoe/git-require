@@ -8,7 +8,18 @@ The plugin will reside in its own git file system, and can be incorporated in th
 
 ## Getting Started
 
+Copy git-require file to your bin folder and make sure it is executable.
 
+Open the terminal in the directory containing the git repository,
+and run the command `git require init`.
+This will create the .git-require directory. If you do not want this to be included in your git repository, add .git-require to your .gitignore file
+
+Takes the following optional parameters:
+* `-l <license>` Use defined license
+* `-r <path-to-remote>` Add a remote origin
+* `-f` Force overwrite license
+* `-h` Show usage options
+* `-v` Display version
 
 ### Prerequisites
 

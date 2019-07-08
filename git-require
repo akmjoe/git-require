@@ -1,0 +1,268 @@
+#!/bin/bash
+
+usage() {
+    echo "usage: git require [options] [<path-to-source> <path-to-destination>]"
+    echo ""
+    echo "Options:"
+    echo "-c Copy files instead of using symbolic links"
+    echo "update [<path-to-source>]	Update files"
+    echo "exclude <path>	Add to exclude list"
+    echo "remove <path>	Remove required directory"
+    echo "init	Initialize and add .git-require to git exclude list"
+    echo
+    echo "If source is a remote repository, a copy will be placed in the .git-require directory."
+}
+
+version() {
+    echo "git require plugin v0.1.0"
+    echo
+}
+
+exclude() {
+	if [ ! -f ".git-require/exclude" ]; then
+		touch ".git-require/exclude"
+	fi
+	echo "$1" >> ".git-require/exclude"
+}
+
+remove() {
+	path="$(echo "$1" | sed -e 's,\/,-,g')"
+	if [ ! -d ".git-require/$path" ]; then
+		echo "$1 is not in the require list! Cannot remove."
+		return 1
+	fi
+	if [ ! -f ".git-require/remove" ]; then
+		touch ".git-require/remove"
+	fi
+	echo "$path" >> ".git-require/remove"
+	echo "$1 staged for removal. Run 'git require update' to apply (Note: this cannot be undone!)"
+}
+
+removals() {
+	if [ ! -f ".git-require/remove" ]; then
+		return 1;
+	fi
+	# Loop through removals
+	while IFS=$'\n' read -r f; do
+		# Loop through files, removing them
+		while IFS=$'\n' read -r file; do
+			rm "$file"
+		done < ".git-require/$f/list"
+		# Remove require directory
+		rm -r ".git-require/$f"
+	done < ".git-require/remove"
+	# Remove list
+	rm ".git-require/remove"
+	return 0
+}
+
+require() {
+	if [ -z $2 ]; then
+		echo "No file path specified!"
+		return 1;
+	fi
+	if [ ! -d $2 ] && [ ! -f $2 ]; then
+		echo "Source file does not exist!"
+		return 1;
+	fi
+	path="$(echo "$2" | sed -e 's,\/,-,g')"
+	if [ ! -d ".git-require/$path" ]; then
+		mkdir ".git-require/$path"
+	fi
+	if [ ! -f ".git-require/$path/info" ]; then
+		touch ".git-require/$path/info"
+	fi
+	if [ ! -f ".git-require/$path/list" ]; then
+		touch ".git-require/$path/list"
+	fi
+	if [ -z $3 ]; then
+		to="."
+	else
+		to=$3
+	fi
+	echo -e "$2\t$to\t$1" >> ".git-require/$path/info"
+	
+	echo "Added $2 to require path. Run 'git require update' to copy files."
+}
+
+update() {
+	# First remove any staged removals
+	if [ -f ".git-require/remove" ]; then
+		removals
+	fi
+	# Now proceed with the update
+	if [ ! -z $1 ]; then
+		path="$(echo "$1" | sed -e 's,\/,-,g')"
+		paths=($path)
+	else
+		paths=()
+		while IFS= read -r -d $'\0'; do
+		    paths+=("$REPLY")
+		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	fi
+	# Get exclude list
+	IFS=$'\n' read -d '' -r -a exclude < .git-require/exclude
+	e="-path */.git"
+	for f in "${exclude[@]}"; do
+		if [ ! -z $f ]; then
+			e+=" -o -path $f"
+		fi
+	done
+	# Loop through paths
+	for f in "${paths[@]}"; do
+		if [ -z $f ] || [ $f == "." ]; then
+			continue
+		fi
+		touch ".git-require/$f/tmp-list"
+		IFS=$'\n' read -d '' -r -a files < ".git-require/$f/tmp-list"
+		# Loop through destinations
+		while IFS=$'\t' read -r from to mode; do
+			echo "Updating $from to $to"
+			# Loop through files
+			while IFS= read -r -d '' -u 9; do
+				# update file
+				mkdir -p $to/$(dirname $(realpath --relative-to=$from $REPLY))
+				if [ -f $to/$(realpath --relative-to=$from $REPLY) ] || [ -d $to/$(realpath --relative-to=$from $REPLY) ]; then
+					# Check if file should exist
+					containsElement "$to/$(realpath --relative-to=$from $REPLY)" "${files[@]}"
+					if [ $? == "1" ]; then
+						# Not from this require - file conflict. Skip.
+						echo "File conflict: $to/$(realpath --relative-to=$from $REPLY) already exists!"
+						continue
+					fi
+				fi
+				if [ $mode == "true" ]; then
+					#echo "Copying $REPLY"
+					cp $(realpath $REPLY) $to/$(realpath --relative-to=$from $REPLY)
+				else
+					#echo "Making link to $REPLY"
+					ln -s -f $(realpath $REPLY) $to/$(realpath --relative-to=$from $REPLY)
+				fi
+				# Add to file list
+			   echo $to/$(realpath --relative-to=$from $REPLY) >> ".git-require/$f/tmp-list"
+			done 9< <( find $from \( $e \) -prune -o -type f -exec printf '%s\0' {} + )
+		done < ".git-require/$f/info"
+		# Remove extra files
+		IFS=$'\n' read -d '' -r -a files < ".git-require/$f/tmp-list"
+		while IFS=$'\n' read -r old; do
+			# Check if file in new list
+			containsElement "$old" "${files[@]}"
+			if [ $? == "1" ]; then
+				#echo "Removing $old"
+				rm "$old"
+			fi
+		done < ".git-require/$f/list"
+		# update file list
+		rm ".git-require/$f/list"
+		mv ".git-require/$f/tmp-list" ".git-require/$f/list"
+	done
+
+}
+
+initialize() {
+	if [ ! -d ".git-require" ]; then
+		echo "Initializing git-require";
+		mkdir ".git-require"
+	fi
+	if [ ! -f ".git-require/exclude" ]; then
+		touch ".git-require/exclude"
+	fi
+	return 0
+	# Below is disabled - can be done manually if desired.
+	if [ ! -f ".gitignore" ]; then
+		echo "Creating exclude file"
+		touch ".gitignore"
+	fi
+	input="$PWD/.gitignore"
+	while IFS= read line; do
+		if [ $line == ".git-require" ]; then
+			echo "Already in exclude list."
+			echo "Done initializing."
+			return 0;
+		fi
+	done <"$input"
+	echo "Adding to exclude list"
+	echo ".git-require" >> ".gitignore"
+	echo "Done initializing."
+}
+
+containsElement () {
+  local e match="$1"
+  shift
+  for e; do [[ "$e" == "$match" ]] && return 0; done
+  return 1
+}
+
+main() {
+	# make sure a git directory
+	if [ ! -d ".git" ]; then
+		echo "This is not a git directory! Please run 'git init' and try again.";
+	fi
+	copy=false
+	action=""
+ 	# Check parameters
+	while (( "$#" )); do
+		case $1 in
+			"-h"|"--help")
+				usage; exit 0
+				;;
+			"-v"|"--version")
+				version; exit 0
+				;;
+			"-c"|"copy")
+				copy=true
+				;;
+			"-u"|"update")
+				action="update"
+				;;
+			"-e"|"exclude")
+				shift
+				while (( "$#" )); do
+					exclude "$1"
+					shift
+				done
+				exit 0
+				;;
+			"-r"|"remove")
+				shift
+				while (( "$#" )); do
+					remove "$1"
+					shift
+				done
+				exit 0
+				;;
+			"-i"|"init")
+				initialize; exit 0
+				;;
+			*)
+				path="$1"
+				shift
+				(( "$#" )) && dest="$1"
+		esac
+		shift
+   done
+	if [ ! -d ".git-require" ]; then
+		echo "Not a git-require directory! Run 'git require init' and try again."
+		return 0
+	fi
+	# Now handle the command
+	case $action in
+		"update")
+			if [ ! -z "$path" ]; then
+				update "$path"
+			else
+				update
+			fi
+			;;
+		*)
+			if [ -z "$path" ]; then
+				echo "Invalid command!"
+				usage; exit 1
+			fi
+			require "$copy" "$path" "$dest"
+			;;
+	esac
+	
+}
+
+main "$@"
