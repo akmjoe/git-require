@@ -8,19 +8,6 @@ The plugin will reside in its own git file system, and can be incorporated in th
 
 ## Getting Started
 
-Copy git-require file to your bin folder and make sure it is executable.
-
-Open the terminal in the directory containing the git repository,
-and run the command `git require init`.
-This will create the .git-require directory. If you do not want this to be included in your git repository, add .git-require to your .gitignore file
-
-Takes the following optional parameters:
-* `-l <license>` Use defined license
-* `-r <path-to-remote>` Add a remote origin
-* `-f` Force overwrite license
-* `-h` Show usage options
-* `-v` Display version
-
 ### Prerequisites
 
 Intended for use on a linux system with bash. Not tested on windows.
@@ -28,6 +15,30 @@ Intended for use on a linux system with bash. Not tested on windows.
 ### Installing
 
 Copy git-create file to your bin folder and make sure it is executable.
+
+### Initializing
+
+Open the terminal in the directory containing the git repository,
+and run the command `git require init`.
+This will create the .git-require directory. If you do not want this to be included in your git repository, add .git-require to your .gitignore file
+
+Now run the command `git require <source> [<destination>]`
+
+Takes the following optional parameters:
+* `-c` Copy the files instead of using symbolic links
+
+This will stage the files. To copy them, run `git require update [<source>]`. If no source is provided, all will be updated.
+
+To remove a require, run `git require remove <source>`. This will stage it for removal when update is called.
+
+There is a global exclude file located in the .git-require directory. These paths use basic wildcard matching - they are sent to the `find` command.
+Each require source is saved in a directory within .git-require named after the file path with `/` replaced with `-`. Within this directory are the configuration files for this source.
+
+* `info` This file contains the tab-separated configuration parameters source path, destination path, and copy mode (true for copy, false for symbolic links)
+* `list` This file contains a list of files that were copied/linked from the source. This is used to check for conflicts and to know what to remove.
+* `exclude` (Optional) This file can be used to provide source-specific excludes.
+
+To see all options, run `git require --help`
 
 ## Authors
 

@@ -6,7 +6,6 @@ usage() {
     echo "Options:"
     echo "-c Copy files instead of using symbolic links"
     echo "update [<path-to-source>]	Update files"
-    echo "exclude <path>	Add to exclude list"
     echo "remove <path>	Remove required directory"
     echo "init	Initialize and add .git-require to git exclude list"
     echo
@@ -18,12 +17,6 @@ version() {
     echo
 }
 
-exclude() {
-	if [ ! -f ".git-require/exclude" ]; then
-		touch ".git-require/exclude"
-	fi
-	echo "$1" >> ".git-require/exclude"
-}
 
 remove() {
 	path="$(echo "$1" | sed -e 's,\/,-,g')"
@@ -100,30 +93,40 @@ update() {
 		    paths+=("$REPLY")
 		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
 	fi
-	# Get exclude list
-	IFS=$'\n' read -d '' -r -a exclude < .git-require/exclude
-	e="-path */.git"
-	for f in "${exclude[@]}"; do
-		if [ ! -z $f ]; then
-			e+=" -o -path $f"
-		fi
-	done
 	# Loop through paths
 	for f in "${paths[@]}"; do
 		if [ -z $f ] || [ $f == "." ]; then
 			continue
 		fi
+		# Get exclude list
+		IFS=$'\n' read -d '' -r -a exclude < .git-require/exclude
+		e="-path */.git"
+		for f in "${exclude[@]}"; do
+			if [ ! -z $f ]; then
+				e+=" -o -path $f"
+			fi
+		done
 		touch ".git-require/$f/tmp-list"
-		IFS=$'\n' read -d '' -r -a files < ".git-require/$f/tmp-list"
+		IFS=$'\n' read -d '' -r -a files < ".git-require/$f/list"
 		# Loop through destinations
 		while IFS=$'\t' read -r from to mode; do
 			echo "Updating $from to $to"
+			# Get extra exclude list
+			if [ -f ".git-require/$f/exclude" ]; then
+				IFS=$'\n' read -d '' -r -a exclude < ".git-require/$f/exclude"
+				for p in "${exclude[@]}"; do
+					if [ ! -z $f ]; then
+						e+=" -o -path $p"
+					fi
+				done
+			fi
 			# Loop through files
 			while IFS= read -r -d '' -u 9; do
 				# update file
 				mkdir -p $to/$(dirname $(realpath --relative-to=$from $REPLY))
 				if [ -f $to/$(realpath --relative-to=$from $REPLY) ] || [ -d $to/$(realpath --relative-to=$from $REPLY) ]; then
 					# Check if file should exist
+
 					containsElement "$to/$(realpath --relative-to=$from $REPLY)" "${files[@]}"
 					if [ $? == "1" ]; then
 						# Not from this require - file conflict. Skip.
@@ -139,7 +142,7 @@ update() {
 					ln -s -f $(realpath $REPLY) $to/$(realpath --relative-to=$from $REPLY)
 				fi
 				# Add to file list
-			   echo $to/$(realpath --relative-to=$from $REPLY) >> ".git-require/$f/tmp-list"
+			   echo "$to/$(realpath --relative-to=$from $REPLY)" >> ".git-require/$f/tmp-list"
 			done 9< <( find $from \( $e \) -prune -o -type f -exec printf '%s\0' {} + )
 		done < ".git-require/$f/info"
 		# Remove extra files
@@ -214,14 +217,6 @@ main() {
 				;;
 			"-u"|"update")
 				action="update"
-				;;
-			"-e"|"exclude")
-				shift
-				while (( "$#" )); do
-					exclude "$1"
-					shift
-				done
-				exit 0
 				;;
 			"-r"|"remove")
 				shift
