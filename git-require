@@ -8,6 +8,7 @@ usage() {
     echo "update [<path-to-source>]	Update files"
     echo "remove <path>	Remove required directory"
     echo "init	Initialize and add .git-require to git exclude list"
+    echo "status Display git status of remote repositories"
     echo
     echo "If source is a remote repository, a copy will be placed in the .git-require directory."
 }
@@ -17,6 +18,36 @@ version() {
     echo
 }
 
+status() {
+	paths=()
+	checked=()
+	while IFS= read -r -d $'\0'; do
+	    paths+=("$REPLY")
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	# save current directory
+	home=$(realpath .)
+	for f in "${paths[@]}"; do
+		if [ $f == "." ]; then
+			continue
+		fi
+		cd $home
+		while IFS=$'\t' read -r from to mode; do
+			cd $from
+			until [ "$(exec pwd)" = / ]; do
+				if [ -d .git ]; then
+					if [[ $(git status -s) ]]; then
+						echo -e "\e[31m`pwd` Has changes\e[0m"
+					else
+						echo "`pwd` up to date"
+					fi
+					break
+				else
+					cd ../
+				fi
+			done
+		done < ".git-require/$f/info"
+	done
+}
 
 remove() {
 	path="$(echo "$1" | sed -e 's,\/,-,g')"
@@ -206,6 +237,9 @@ main() {
  	# Check parameters
 	while (( "$#" )); do
 		case $1 in
+			"status")
+				status; exit 0
+				;;
 			"-h"|"--help")
 				usage; exit 0
 				;;
