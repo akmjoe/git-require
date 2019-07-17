@@ -5,7 +5,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "-c Copy files instead of using symbolic links"
-    echo "update [name]	Update files"
+    echo "update [-f] [name]	Update files"
     echo "remove [name]	Remove required directory"
     echo "init	Initialize and add .git-require to git exclude list"
     echo "status Display git status of remote repositories"
@@ -179,8 +179,8 @@ update() {
 		removals
 	fi
 	# Now proceed with the update
-	if [ ! -z $1 ]; then
-		path="$(echo "$1" | sed -e 's,\/,-,g')"
+	if [ ! -z $2 ]; then
+		path="$(echo "$2" | sed -e 's,\/,-,g')"
 		paths=($path)
 	else
 		paths=()
@@ -188,6 +188,8 @@ update() {
 		    paths+=("$REPLY")
 		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
 	fi
+	# clear conflicts file
+	true > ".git-require/conflicts.log"
 	# Loop through paths
 	for f in "${paths[@]}"; do
 		if [ -z $f ] || [ $f == "." ]; then
@@ -196,9 +198,9 @@ update() {
 		# Get exclude list
 		IFS=$'\n' read -d '' -r -a exclude < .git-require/exclude
 		e="-path */.git"
-		for f in "${exclude[@]}"; do
-			if [ ! -z $f ]; then
-				e+=" -o -path $f"
+		for p in "${exclude[@]}"; do
+			if [ ! -z $p ]; then
+				e+=" -o -path $p"
 			fi
 		done
 		touch ".git-require/$f/tmp-list"
@@ -210,12 +212,13 @@ update() {
 				echo "$from is disabled - skipping"
 				continue
 			fi
+			to=$(realpath $to)
 			echo "Updating $from to $to"
 			# Get extra exclude list
 			if [ -f ".git-require/$f/exclude" ]; then
 				IFS=$'\n' read -d '' -r -a exclude < ".git-require/$f/exclude"
 				for p in "${exclude[@]}"; do
-					if [ ! -z $f ]; then
+					if [ ! -z $p ]; then
 						e+=" -o -path $p"
 					fi
 				done
@@ -228,9 +231,11 @@ update() {
 					# Check if file should exist
 
 					containsElement "$to/$(realpath --relative-to=$from $REPLY)" "${files[@]}"
-					if [ $? == "1" ]; then
+					if [ $? == "1" ] && [ "$1" == "false" ]; then
 						# Not from this require - file conflict. Skip.
-						echo "File conflict: $to/$(realpath --relative-to=$from $REPLY) already exists!"
+						conflict=true
+						echo "File conflict: $to/$(realpath --relative-to=$from $REPLY) exists!"
+						echo "$to/$(realpath --relative-to=$from $REPLY)" >> ".git-require/conflicts.log"
 						continue
 					fi
 				fi
@@ -259,7 +264,9 @@ update() {
 		rm ".git-require/$f/list"
 		mv ".git-require/$f/tmp-list" ".git-require/$f/list"
 	done
-
+	if [ $conflict ]; then
+		echo -e "\e[31mSome conflicting files were not copied, use -f option to overwrite.\e[0m"
+	fi
 }
 
 initialize() {
@@ -303,6 +310,7 @@ main() {
 	fi
 	copy=false
 	action=""
+	force=false
  	# Check parameters
 	while (( "$#" )); do
 		case $1 in
@@ -323,6 +331,9 @@ main() {
 				;;
 			"-u"|"update")
 				action="update"
+				;;
+			"-f"|"force")
+				force=true
 				;;
 			"-r"|"remove")
 				shift
@@ -369,11 +380,7 @@ main() {
 	# Now handle the command
 	case $action in
 		"update")
-			if [ ! -z "$name" ]; then
-				update "$name"
-			else
-				update
-			fi
+			update "$force" "$name"
 			;;
 		*)
 			if [ -z "$path" ]; then

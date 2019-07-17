@@ -26,6 +26,7 @@ Now run the command `git require <name> <source> [<destination>]`
 
 Takes the following optional parameters:
 * `-c` Copy the files instead of using symbolic links
+* `-f` Force overwrite existing files
 
 This will stage the files. To copy them, run `git require update [<source>]`. If no source is provided, all will be updated.
 
