@@ -1,14 +1,17 @@
 #!/bin/bash
 
 usage() {
-    echo "usage: git require [options] [<path-to-source> <path-to-destination>]"
+    echo "usage: git require [options] [name <path-to-source> <path-to-destination>]"
     echo ""
     echo "Options:"
     echo "-c Copy files instead of using symbolic links"
-    echo "update [<path-to-source>]	Update files"
-    echo "remove <path>	Remove required directory"
+    echo "update [name]	Update files"
+    echo "remove [name]	Remove required directory"
     echo "init	Initialize and add .git-require to git exclude list"
     echo "status Display git status of remote repositories"
+    echo "enable [name] Enable require"
+    echo "disable [name] Disable require"
+    echo "list Lists requires and require paths"
     echo
     echo "If source is a remote repository, a copy will be placed in the .git-require directory."
 }
@@ -50,7 +53,8 @@ status() {
 }
 
 remove() {
-	path="$(echo "$1" | sed -e 's,\/,-,g')"
+	#path="$(echo "$1" | sed -e 's,\/,-,g')"
+	path=$1
 	if [ ! -d ".git-require/$path" ]; then
 		echo "$1 is not in the require list! Cannot remove."
 		return 1
@@ -60,6 +64,65 @@ remove() {
 	fi
 	echo "$path" >> ".git-require/remove"
 	echo "$1 staged for removal. Run 'git require update' to apply (Note: this cannot be undone!)"
+}
+
+able() {
+	if [ ! -z $2 ]; then
+		path="$(echo "$2" | sed -e 's,\/,-,g')"
+		paths=($path)
+	else
+		paths=()
+		while IFS= read -r -d $'\0'; do
+		    paths+=("$REPLY")
+		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	fi
+	# Loop through paths
+	for f in "${paths[@]}"; do
+		if [ -z $f ] || [ $f == "." ]; then
+			continue
+		fi
+		touch ".git-require/$f/temp-info"
+		while IFS=$'\t' read -r from to mode status; do
+			# Looping through file entries, enabling
+			if [ "$1" == "true" ]; then
+				echo -e "$from\t$to\t$mode\ttrue" >> ".git-require/$f/temp-info"
+			else
+				echo -e "$from\t$to\t$mode\tfalse" >> ".git-require/$f/temp-info"
+			fi
+		done < ".git-require/$f/info"
+		# now remove info and rename temp-info to info
+		rm ".git-require/$f/info"
+		mv ".git-require/$f/temp-info" ".git-require/$f/info"
+		if [ "$1" == "true" ]; then
+			echo "$f Enabled"
+		else
+			echo "$f Disabled"
+		fi
+	done
+	echo "Run git require update to activate these changes."
+}
+
+list() {
+	# Get paths
+	paths=()
+	while IFS= read -r -d $'\0'; do
+	    paths+=("$REPLY")
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	# Loop through paths
+	for f in "${paths[@]}"; do
+		if [ -z $f ] || [ $f == "." ]; then
+			continue
+		fi
+		echo "$(echo "$f" | sed -e 's,.\/,,')"
+		while IFS=$'\t' read -r from to mode status; do
+			# Looping through file entries
+			if [ "$status" == "true" ]; then
+				echo -e "|--$from \e[42mEnabled\e[0m"
+			else
+				echo -e "|--$from \e[41mDisabled\e[0m"
+			fi
+		done < ".git-require/$f/info"
+	done
 }
 
 removals() {
@@ -81,15 +144,16 @@ removals() {
 }
 
 require() {
-	if [ -z $2 ]; then
+	path="$2"
+	if [ -z $3 ]; then
 		echo "No file path specified!"
 		return 1;
 	fi
-	if [ ! -d $2 ] && [ ! -f $2 ]; then
+	if [ ! -d $3 ] && [ ! -f $3 ]; then
 		echo "Source file does not exist!"
 		return 1;
 	fi
-	path="$(echo "$2" | sed -e 's,\/,-,g')"
+	#path="$(echo "$3" | sed -e 's,\/,-,g')"
 	if [ ! -d ".git-require/$path" ]; then
 		mkdir ".git-require/$path"
 	fi
@@ -99,14 +163,14 @@ require() {
 	if [ ! -f ".git-require/$path/list" ]; then
 		touch ".git-require/$path/list"
 	fi
-	if [ -z $3 ]; then
+	if [ -z $4 ]; then
 		to="."
 	else
-		to=$3
+		to=$4
 	fi
-	echo -e "$2\t$to\t$1" >> ".git-require/$path/info"
+	echo -e "$3\t$to\t$1\ttrue" >> ".git-require/$path/info"
 	
-	echo "Added $2 to require path. Run 'git require update' to copy files."
+	echo "Added $3 to require path. Run 'git require update' to copy files."
 }
 
 update() {
@@ -140,7 +204,12 @@ update() {
 		touch ".git-require/$f/tmp-list"
 		IFS=$'\n' read -d '' -r -a files < ".git-require/$f/list"
 		# Loop through destinations
-		while IFS=$'\t' read -r from to mode; do
+		while IFS=$'\t' read -r from to mode status; do
+			if [ "$status" == "false" ]; then
+				# disabled - skip copy
+				echo "$from is disabled - skipping"
+				continue
+			fi
 			echo "Updating $from to $to"
 			# Get extra exclude list
 			if [ -f ".git-require/$f/exclude" ]; then
@@ -246,6 +315,9 @@ main() {
 			"-v"|"--version")
 				version; exit 0
 				;;
+			"-l"|"list")
+				list; exit 0
+				;;
 			"-c"|"copy")
 				copy=true
 				;;
@@ -263,10 +335,30 @@ main() {
 			"-i"|"init")
 				initialize; exit 0
 				;;
+			"-e"|"enable")
+				shift
+				if (( ! "$#" )); then able "true"; fi
+				while (( "$#" )); do
+					able "true" "$1"
+					shift
+				done
+				exit 0
+				;;
+			"-d"|"disable")
+				shift
+				if (( ! "$#" )); then able "false"; fi
+				while (( "$#" )); do
+					able "false" "$1"
+					shift
+				done
+				exit 0
+				;;
 			*)
+				name="$1"
+				shift
 				path="$1"
 				shift
-				(( "$#" )) && dest="$1"
+				dest="$1"
 		esac
 		shift
    done
@@ -277,8 +369,8 @@ main() {
 	# Now handle the command
 	case $action in
 		"update")
-			if [ ! -z "$path" ]; then
-				update "$path"
+			if [ ! -z "$name" ]; then
+				update "$name"
 			else
 				update
 			fi
@@ -288,7 +380,7 @@ main() {
 				echo "Invalid command!"
 				usage; exit 1
 			fi
-			require "$copy" "$path" "$dest"
+			require "$copy" "$name" "$path" "$dest"
 			;;
 	esac
 	
