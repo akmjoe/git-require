@@ -1,17 +1,18 @@
 #!/bin/bash
 
 usage() {
-    echo "usage: git require [options] [name <path-to-source> <path-to-destination>]"
+    echo -e "usage: \e[1mgit require [options] [name <path-to-source> <path-to-destination>]\e[0m"
     echo ""
-    echo "Options:"
-    echo "-c Copy files instead of using symbolic links"
-    echo "update [-f] [name]	Update files"
-    echo "remove [name]	Remove required directory"
-    echo "init	Initialize and add .git-require to git exclude list"
-    echo "status Display git status of remote repositories"
-    echo "enable [name] Enable require"
-    echo "disable [name] Disable require"
-    echo "list Lists requires and require paths"
+    echo -e "Options:"
+    echo -e "\e[1m-c\e[0m Copy files instead of using symbolic links"
+    echo -e "\e[1mupdate [-f] [name]\e[0m	Update files"
+    echo -e "\e[1mremove [name]\e[0m	Remove required directory"
+    echo -e "\e[1minit\e[0m	Initialize and add .git-require to git exclude list"
+    echo -e "\e[1mstatus [-o]\e[0m Display git status of remote repositories. The -o option opens modified git ripositories in a new terminal"
+    echo -e "\e[1menable [name]\e[0m Enable require"
+    echo -e "\e[1mdisable [name]\e[0m Disable require"
+    echo -e "\e[1mlist\e[0m Lists requires and require paths"
+    echo -e "\e[1mall\e[0m \"command\" Runs the specified command in all git directories."
     echo
     echo "If source is a remote repository, a copy will be placed in the .git-require directory."
 }
@@ -21,7 +22,10 @@ version() {
     echo
 }
 
-status() {
+all() {
+	if [ -z "$1" ]; then
+		return 1
+	fi
 	paths=()
 	checked=()
 	while IFS= read -r -d $'\0'; do
@@ -29,6 +33,7 @@ status() {
 	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
 	# save current directory
 	home=$(realpath .)
+	files=()
 	for f in "${paths[@]}"; do
 		if [ $f == "." ]; then
 			continue
@@ -37,9 +42,61 @@ status() {
 		while IFS=$'\t' read -r from to mode; do
 			cd $from
 			until [ "$(exec pwd)" = / ]; do
-				if [ -d .git ]; then
+				containsElement "`pwd`" "${files[@]}"
+				if [ $? == "0" ]; then
+					break
+				elif [ -d .git ]; then
+					# add to found list
+					files+=("`pwd`")
+					# run command
+					echo -e "\e[32m`pwd`\e[0m:"
+					echo "`git $1`"
+					break
+				else
+					cd ../
+				fi
+			done
+		done < ".git-require/$f/info"
+	done
+}
+
+status() {
+	# get system settings
+	if [ -f ".git-require/system" ]; then
+		while IFS=$'\t' read -r key terminal; do
+			if [ "$key" == "terminal" ]; then
+				break
+			fi
+		done < ".git-require/system"
+	fi
+	paths=()
+	checked=()
+	while IFS= read -r -d $'\0'; do
+	    paths+=("$REPLY")
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	# save current directory
+	home=$(realpath .)
+	files=()
+	for f in "${paths[@]}"; do
+		if [ $f == "." ]; then
+			continue
+		fi
+		cd $home
+		while IFS=$'\t' read -r from to mode; do
+			cd $from
+			until [ "$(exec pwd)" = / ]; do
+				containsElement "`pwd`" "${files[@]}"
+				if [ $? == "0" ]; then
+					break
+				elif [ -d .git ]; then
+					files+=("`pwd`")
 					if [[ $(git status -s) ]]; then
 						echo -e "\e[31m`pwd` Has changes\e[0m"
+						if [[ "$1" == "-o" ]] || [[ "$1" == "open" ]] && [[ "$terminal" ]]; then
+							# open a terminal
+							title=${PWD##*/}
+							$($terminal"`pwd`" --title="$title")
+						fi
 					else
 						echo "`pwd` up to date"
 					fi
@@ -277,22 +334,37 @@ initialize() {
 	if [ ! -f ".git-require/exclude" ]; then
 		touch ".git-require/exclude"
 	fi
-	return 0
-	# Below is disabled - can be done manually if desired.
-	if [ ! -f ".gitignore" ]; then
-		echo "Creating exclude file"
-		touch ".gitignore"
-	fi
-	input="$PWD/.gitignore"
-	while IFS= read line; do
-		if [ $line == ".git-require" ]; then
-			echo "Already in exclude list."
-			echo "Done initializing."
-			return 0;
+	read -p "Should I add .git-require to .gitignore? Y/N" ignore
+	if [ "$ignore" == "Y" ]; then
+		if [ ! -f ".gitignore" ]; then
+			echo "Creating exclude file"
+			touch ".gitignore"
 		fi
-	done <"$input"
-	echo "Adding to exclude list"
-	echo ".git-require" >> ".gitignore"
+		input="$PWD/.gitignore"
+		while IFS= read line; do
+			if [ $line == ".git-require" ]; then
+				echo "Already in exclude list."
+				echo "Done initializing."
+				return 0;
+			fi
+		done <"$input"
+		echo "Adding to exclude list"
+		echo ".git-require" >> ".gitignore"
+	fi
+	if [ ! -f ".git-require/system" ]; then
+		touch ".git-require/system"
+	fi
+	while IFS=$'\t' read -r key com; do
+		if [ "$key" == "terminal" ]; then
+			break
+		fi
+	done < ".git-require/system"
+	if [ ! "$com" ]; then
+		read -p "System Command to open a new terminal (required for advanced git status, working directory will be appended):" term
+		if [ "$term" ]; then
+			echo -e "terminal\t$term" >> ".git-require/system"
+		fi
+	fi
 	echo "Done initializing."
 }
 
@@ -314,8 +386,17 @@ main() {
  	# Check parameters
 	while (( "$#" )); do
 		case $1 in
+			"all")
+				shift
+				while (( "$#" )); do
+					all "$1"
+					shift
+				done
+				exit 0
+				;;
 			"status")
-				status; exit 0
+				shift
+				status "$@"; exit 0
 				;;
 			"-h"|"--help")
 				usage; exit 0

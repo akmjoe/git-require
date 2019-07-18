@@ -26,7 +26,6 @@ Now run the command `git require <name> <source> [<destination>]`
 
 Takes the following optional parameters:
 * `-c` Copy the files instead of using symbolic links
-* `-f` Force overwrite existing files
 
 This will stage the files. To copy them, run `git require update [<source>]`. If no source is provided, all will be updated.
 
@@ -36,13 +35,15 @@ There is a global exclude file located in the .git-require directory. These path
 Each require source is saved in a directory within .git-require under the `name` parameter. Within this directory are the configuration files for this source.
 Each named require can have multiple source-destination combinations.
 
+* `update [-f] [<name>]` Copies/links the files, removing any removed from the source. The `-f` option will force overwrite existing files.
 * `info` This file contains the tab-separated configuration parameters source path, destination path, and copy mode (true for copy, false for symbolic links)
 * `list` This file contains a list of files that were copied/linked from the source. This is used to check for conflicts and to know what to remove.
 * `exclude` (Optional) This file can be used to provide source-specific excludes.
-* `status` Shows if uncommited changes in require sources (if they are git directories)
+* `status [-o]` Shows if uncommited changes in require sources (if they are git directories). The `-o` option opens directories with changes in a new terminal.
 * `disable [<name>]` Disables a require. Disabled requires will be removed on update, but no information is lost. Se also `remove`. 
 * `enable [<name>]` Re-enables a require.
 * `remove <name>` Permanently removes a require.
+* `all "<command>"` Run a git command on all source git directories
 
 To see all options, run `git require --help`
 
