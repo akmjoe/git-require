@@ -1,20 +1,67 @@
 #!/bin/bash
 
 usage() {
-    echo -e "usage: \e[1mgit require [options] [name <path-to-source> <path-to-destination>]\e[0m"
-    echo ""
-    echo -e "Options:"
-    echo -e "\e[1m-c\e[0m Copy files instead of using symbolic links"
-    echo -e "\e[1mupdate [-f] [name]\e[0m	Update files"
-    echo -e "\e[1mremove [name]\e[0m	Remove required directory"
-    echo -e "\e[1minit\e[0m	Initialize and add .git-require to git exclude list"
-    echo -e "\e[1mstatus [-o]\e[0m Display git status of remote repositories. The -o option opens modified git ripositories in a new terminal"
-    echo -e "\e[1menable [name]\e[0m Enable require"
-    echo -e "\e[1mdisable [name]\e[0m Disable require"
-    echo -e "\e[1mlist\e[0m Lists requires and require paths"
-    echo -e "\e[1mall\e[0m \"command\" Runs the specified command in all git directories."
-    echo
-    echo "If source is a remote repository, a copy will be placed in the .git-require directory."
+	if [ -z "$1" ]; then
+	    echo -e "To add a require: \e[1mgit require [options] [name <path-to-source> <path-to-destination>]\e[0m"
+	    echo ""
+	    echo -e "Options:"
+	    echo -e "\e[1m-c\e[0m Copy files instead of using symbolic links"
+	    echo -e "\e[1m-d\e[0m Use hard links instead of symbolic links"
+	    echo ""
+	    echo -e "Other commands:"
+	    echo -e "\e[1mupdate [options] [name]\e[0m	Update files"
+	    echo -e "\e[1mremove [name]\e[0m	Remove required directory"
+	    echo -e "\e[1minit\e[0m	Initialize and add .git-require to git exclude list"
+	    echo -e "\e[1mstatus [options]\e[0m Display git status of remote repositories. The -o option opens modified git repositories in a new terminal"
+	    echo -e "\e[1menable [name]\e[0m Enable require"
+	    echo -e "\e[1mdisable [name]\e[0m Disable require"
+	    echo -e "\e[1mlist\e[0m Lists requires and require paths"
+	    echo -e "\e[1mall\e[0m \"command\" Runs the specified command in all git directories."
+	    echo
+	    echo -e "Try \e[1mgit require -h [command]\e[0m for more information about a specific command"
+	    echo
+	else
+		case "$1" in
+			"update")
+				echo -e "\e[1mgit require update [options] [name]\e[0m	Update files"
+				echo -e "Options:"
+	    		echo -e "\e[1m-f\e[0m Force overwrite conflicting files"
+			return 0
+			;;
+			"remove")
+				echo -e "\e[1mgit require remove [name]\e[0m	Remove required directory"
+			return 0
+			;;
+			"init")
+				echo -e "\e[1mgit require init\e[0m	Initialize and add .git-require to git exclude list"
+			return 0
+			;;
+			"status")
+				echo -e "\e[1mgit require status [-o]\e[0m Display git status of remote repositories."
+				echo -e "Options:"
+	    		echo -e "\e[1m-o\e[0m Open modified git repositories in a new terminal (system command must be provided in configuration)"
+			return 0
+			;;
+			"enable")
+				echo -e "\e[1mgit require enable [name]\e[0m Enable require"
+			return 0
+			;;
+			"disable")
+				echo -e "\e[1mgit require disable [name]\e[0m Disable require"
+			return 0
+			;;
+			"list")
+				echo -e "\e[1mgit require list\e[0m Lists requires and require paths"
+			return 0
+			;;
+			"all")
+				echo -e "\e[1mgit require all\e[0m \"command\" Runs the specified command in all git directories."
+			return 0
+			;;
+		esac
+   fi
+   
+    #echo "If source is a remote repository, a copy will be placed in the .git-require directory."
 }
 
 version() {
@@ -230,6 +277,41 @@ require() {
 	echo "Added $3 to require path. Run 'git require update' to copy files."
 }
 
+remote() {
+	# get remote path
+	if [ -f ".git-require/system" ]; then
+		while IFS=$'\t' read -r key remote abs; do
+			if [ "$key" == "remote" ]; then
+				break
+			fi
+		done < ".git-require/system"
+	fi
+	if [ ! -z $2 ]; then
+		path="$(echo "$2" | sed -e 's,\/,-,g')"
+		paths=($path)
+	else
+		paths=()
+		while IFS= read -r -d $'\0'; do
+		    paths+=("$REPLY")
+		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	fi
+	# loop through paths
+	for f in "${paths[@]}"; do
+		if [ -z $f ] || [ $f == "." ]; then
+			continue
+		fi
+		# copy files
+		while IFS=$'\t' read -r file; do
+			dest="`echo "$file" | sed -e 's#'"$abs"'##'`"
+			if [ $1 == "false" ]; then
+				echo "copying to $remote/$dest `rsync -rCu -e 'ssh -l ussander' $file $remote/$dest`"
+			else
+				echo "copying to $remote/$dest `scp $file $remote/$dest`"
+			fi
+		done < ".git-require/$f/list"
+	done
+}
+
 update() {
 	# First remove any staged removals
 	if [ -f ".git-require/remove" ]; then
@@ -275,11 +357,12 @@ update() {
 			if [ -f ".git-require/$f/exclude" ]; then
 				IFS=$'\n' read -d '' -r -a exclude < ".git-require/$f/exclude"
 				for p in "${exclude[@]}"; do
-					if [ ! -z $p ]; then
-						e+=" -o -path $p"
+					if [ ! -z "$p" ]; then
+						e+=" -o -path '$p'"
 					fi
 				done
 			fi
+			
 			# Loop through files
 			while IFS= read -r -d '' -u 9; do
 				# update file
@@ -299,6 +382,8 @@ update() {
 				if [ $mode == "true" ]; then
 					#echo "Copying $REPLY"
 					cp $(realpath $REPLY) $to/$(realpath --relative-to=$from $REPLY)
+				elif [ $mode == "hard" ]; then
+					ln -f $(realpath $REPLY) $to/$(realpath --relative-to=$from $REPLY)
 				else
 					#echo "Making link to $REPLY"
 					ln -s -f $(realpath $REPLY) $to/$(realpath --relative-to=$from $REPLY)
@@ -365,7 +450,7 @@ initialize() {
 			echo -e "terminal\t$term" >> ".git-require/system"
 		fi
 	fi
-	echo "Done initializing."
+	echo -e "Done initializing. Run \e[1mgit require -h\e[0m to list available commands."
 }
 
 containsElement () {
@@ -399,7 +484,13 @@ main() {
 				status "$@"; exit 0
 				;;
 			"-h"|"--help")
-				usage; exit 0
+				shift
+				if (( ! "$#" )); then 
+					usage
+				else
+					usage "$1"
+				fi
+				exit 0
 				;;
 			"-v"|"--version")
 				version; exit 0
@@ -409,6 +500,9 @@ main() {
 				;;
 			"-c"|"copy")
 				copy=true
+				;;
+			"-d"|"hard")
+				copy="hard"
 				;;
 			"-u"|"update")
 				action="update"
@@ -445,6 +539,9 @@ main() {
 				done
 				exit 0
 				;;
+			"remote")
+				action="remote"
+				;;
 			*)
 				name="$1"
 				shift
@@ -462,6 +559,9 @@ main() {
 	case $action in
 		"update")
 			update "$force" "$name"
+			;;
+		"remote")
+			remote "$force" "$name"
 			;;
 		*)
 			if [ -z "$path" ]; then
