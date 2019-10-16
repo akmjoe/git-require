@@ -295,6 +295,9 @@ remote() {
 		    paths+=("$REPLY")
 		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
 	fi
+	# Create file for list of files to copy
+	touch ".git-require/remote"
+	
 	# loop through paths
 	for f in "${paths[@]}"; do
 		if [ -z $f ] || [ $f == "." ]; then
@@ -303,13 +306,15 @@ remote() {
 		# copy files
 		while IFS=$'\t' read -r file; do
 			dest="`echo "$file" | sed -e 's#'"$abs"'##'`"
-			if [ $1 == "false" ]; then
-				echo "copying to $remote/$dest `rsync -rCu -e 'ssh -l ussander' $file $remote/$dest`"
-			else
-				echo "copying to $remote/$dest `scp $file $remote/$dest`"
-			fi
+			echo "$dest" >> ".git-require/remote"
 		done < ".git-require/$f/list"
 	done
+	if [ $1 == "false" ]; then
+		echo "`rsync -uv --files-from=.git-require/remote . $remote`"
+	else
+		echo "`rsync -v --files-from=.git-require/remote . $remote`"
+	fi
+	rm ".git-require/remote"
 }
 
 update() {
