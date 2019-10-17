@@ -296,6 +296,7 @@ remote() {
 		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
 	fi
 	# Create file for list of files to copy
+	rm ".git-require/remote"
 	touch ".git-require/remote"
 	
 	# loop through paths
@@ -310,11 +311,11 @@ remote() {
 		done < ".git-require/$f/list"
 	done
 	if [ $1 == "false" ]; then
-		echo "`rsync -uv --files-from=.git-require/remote . $remote`"
+		echo "`rsync -uvL --files-from=.git-require/remote . $remote`"
 	else
-		echo "`rsync -v --files-from=.git-require/remote . $remote`"
+		echo "`rsync -vL --files-from=.git-require/remote . $remote`"
 	fi
-	rm ".git-require/remote"
+	
 }
 
 update() {
