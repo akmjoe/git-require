@@ -14,7 +14,7 @@ Intended for use on a linux system with bash. Not tested on windows.
 
 ### Installing
 
-Copy git-create file to your bin folder and make sure it is executable.
+Copy git-require file to your bin folder and make sure it is executable.
 
 ### Initializing
 
@@ -34,6 +34,8 @@ To remove a require, run `git require remove <source>`. This will stage it for r
 There is a global exclude file located in the .git-require directory. These paths use basic wildcard matching - they are sent to the `find` command.
 Each require source is saved in a directory within .git-require under the `name` parameter. Within this directory are the configuration files for this source.
 Each named require can have multiple source-destination combinations.
+
+If the source is a file instead of a directory, the file will be copied to the destination exactly, so make sure the destination path includes the desired filename.
 
 * `update [-f] [<name>]` Copies/links the files, removing any removed from the source. The `-f` option will force overwrite existing files.
 * `info` This file contains the tab-separated configuration parameters source path, destination path, and copy mode (true for copy, false for symbolic links)

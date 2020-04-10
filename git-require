@@ -357,8 +357,33 @@ update() {
 				echo "$from is disabled - skipping"
 				continue
 			fi
-			to=$(realpath $to)
 			echo "Updating $from to $to"
+			
+			if [ -f $from ]; then
+				# from is a file, direct copy
+				containsElement "$to" "${files[@]}"
+				if [ $? == "1" ] && [ "$1" == "false" ]; then
+					# Not from this require - file conflict. Skip.
+					conflict=true
+					echo "File conflict: $to exists!"
+					echo "$to" >> ".git-require/conflicts.log"
+					continue
+				fi
+				if [ $mode == "true" ]; then
+					#echo "Copying $REPLY"
+					cp $from $to
+				elif [ $mode == "hard" ]; then
+					ln -f $from $to
+				else
+					#echo "Making link to $REPLY"
+					ln -s -f $from $to
+				fi
+				# Add to file list
+			   echo "$to" >> ".git-require/$f/tmp-list"
+				continue
+			fi
+			to=$(realpath $to)
+			
 			# Get extra exclude list
 			if [ -f ".git-require/$f/exclude" ]; then
 				IFS=$'\n' read -d '' -r -a exclude < ".git-require/$f/exclude"
@@ -372,10 +397,8 @@ update() {
 			# Loop through files
 			while IFS= read -r -d '' -u 9; do
 				# update file
-				mkdir -p $to/$(dirname $(realpath --relative-to=$from $REPLY))
 				if [ -f $to/$(realpath --relative-to=$from $REPLY) ] || [ -d $to/$(realpath --relative-to=$from $REPLY) ]; then
 					# Check if file should exist
-
 					containsElement "$to/$(realpath --relative-to=$from $REPLY)" "${files[@]}"
 					if [ $? == "1" ] && [ "$1" == "false" ]; then
 						# Not from this require - file conflict. Skip.
@@ -385,6 +408,7 @@ update() {
 						continue
 					fi
 				fi
+				mkdir -p $to/$(dirname $(realpath --relative-to=$from $REPLY))
 				if [ $mode == "true" ]; then
 					#echo "Copying $REPLY"
 					cp $(realpath $REPLY) $to/$(realpath --relative-to=$from $REPLY)
