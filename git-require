@@ -361,11 +361,18 @@ update() {
 			
 			if [ -f $from ]; then
 				# from is a file, direct copy
-				containsElement "$to" "${files[@]}"
-				if [ $? == "1" ] && [ "$1" == "false" ]; then
-					# Not from this require - file conflict. Skip.
+				if [ -f $to ]; then
+					containsElement "$to" "${files[@]}"
+					if [ $? == "1" ] && [ "$1" == "false" ]; then
+						# Not from this require - file conflict. Skip.
+						conflict=true
+						echo "File conflict: $to exists!"
+						echo "$to" >> ".git-require/conflicts.log"
+						continue
+					fi
+				elif [ -d $to ]; then
 					conflict=true
-					echo "File conflict: $to exists!"
+					echo "File conflict: $to is a directory, $from is a file!"
 					echo "$to" >> ".git-require/conflicts.log"
 					continue
 				fi
