@@ -2,7 +2,7 @@
 
 usage() {
 	if [ -z "$1" ]; then
-	    echo -e "To add a require: \e[1mgit require [options] [name <path-to-source> <path-to-destination>]\e[0m"
+	    echo -e "To add a require: \e[1mgit require add [options] [name <path-to-source> <path-to-destination>]\e[0m"
 	    echo ""
 	    echo -e "Options:"
 	    echo -e "\e[1m-c\e[0m Copy files instead of using symbolic links"
@@ -585,6 +585,9 @@ main() {
 			"remote")
 				action="remote"
 				;;
+            "add")
+                action="add"
+                ;;
 			*)
 				name="$1"
 				shift
@@ -606,7 +609,7 @@ main() {
 		"remote")
 			remote "$force" "$name"
 			;;
-		*)
+		"add")
 			if [ -z "$path" ]; then
 				echo "Invalid command!"
 				usage; exit 1

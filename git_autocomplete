@@ -1,0 +1,54 @@
+#!/bin/bash
+_git_require ()
+{
+	if [ -n "$(__git_find_on_cmdline update)" ] || [ -n "$(__git_find_on_cmdline enable)" ] || [ -n "$(__git_find_on_cmdline disable)" ]; then
+		options=$( compgen -d .git-require/ );
+		temp=""
+		if [ -n "$(__git_find_on_cmdline update)" ] && [ -z "$(__git_find_on_cmdline -f)" ]; then
+			temp="-f force"
+		fi
+		while IFS=$'\n' read -r line; do
+    		temp+=" ${line##*/}"
+		done <<< "$options"
+      __gitcomp "$temp"
+   	compopt +o default
+   elif [ -n "$(__git_find_on_cmdline status)" ]; then
+   	__gitcomp "-o"
+   	compopt +o default
+   elif [ -n "$(__git_find_on_cmdline add)" ]; then
+   	if [ "$(__git_count_arguments add)" -eq 0 ] && [ -z "$(__git_find_on_cmdline -c)" ] && [ -z "$(__git_find_on_cmdline -d)" ] && [ -z "$(__git_find_on_cmdline hard)" ] && [ -z "$(__git_find_on_cmdline copy)" ]; then
+   		__gitcomp "-c -d copy hard"
+   	fi
+   elif [ -n "$(__git_find_on_cmdline all)" ]; then
+   	compopt +o default
+   else
+   	__gitcomp "add update remote remove init status enable disable list all"
+   	compopt +o default
+   fi
+}
+
+_git_create ()
+{
+	if [ -n "$(__git_find_on_cmdline -l)" ]; then
+		options=$( ls ~/bin/templates/ );
+		temp=""
+		while IFS=$'\n' read -r line; do
+			if [ "${line##*/}" == "readme" ]; then
+				continue
+			fi
+    		temp+=" ${line##*/}"
+		done <<< "$options"
+      __gitcomp "$temp"
+   else
+   	__gitcomp "-l -r -f"
+   fi
+   compopt +o default
+}
+
+_git_ocpack ()
+{
+	if [ -z "$(__git_find_on_cmdline '-d --destination')" ]; then
+		__gitcomp "-i -p -q -d --destination --initialize --ocmod --vqmod"
+		compopt +o default
+	fi
+}

@@ -22,7 +22,7 @@ Open the terminal in the directory containing the git repository,
 and run the command `git require init`.
 This will create the .git-require directory. If you do not want this to be included in your git repository, add .git-require to your .gitignore file
 
-Now run the command `git require <name> <source> [<destination>]`
+Now run the command `git require add <name> <source> [<destination>]`
 
 Takes the following optional parameters:
 * `-c` Copy the files instead of using symbolic links
