@@ -87,6 +87,9 @@ all() {
 		fi
 		cd $home
 		while IFS=$'\t' read -r from to mode; do
+			if [ -f $from ]; then
+				continue
+			fi
 			cd $from
 			until [ "$(exec pwd)" = / ]; do
 				containsElement "`pwd`" "${files[@]}"
@@ -130,6 +133,9 @@ status() {
 		fi
 		cd $home
 		while IFS=$'\t' read -r from to mode; do
+			if [ -f $from ]; then
+				continue
+			fi
 			cd $from
 			until [ "$(exec pwd)" = / ]; do
 				containsElement "`pwd`" "${files[@]}"
