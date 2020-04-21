@@ -32,20 +32,23 @@ This will stage the files. To copy them, run `git require update [<source>]`. If
 To remove a require, run `git require remove <source>`. This will stage it for removal when update is called.
 
 There is a global exclude file located in the .git-require directory. These paths use basic wildcard matching - they are sent to the `find` command.
-Each require source is saved in a directory within .git-require under the `name` parameter. Within this directory are the configuration files for this source.
-Each named require can have multiple source-destination combinations.
+Each require source is saved in a directory within .git-require under the `name` parameter. Within this directory are the configuration files for this source. The files are as follows:
+* `info` This file contains the tab-separated configuration parameters source path, destination path, copy mode (*true* for copy, *false* for symbolic links, *hard* for hard links), and status (*true* for enabled, *false* for disabled)
+Each named require can have multiple source-destination combinations. If the source is a file instead of a directory, the file will be copied to the destination exactly, so make sure the destination path includes the desired filename.
+* `list` This file contains a list of files that were copied/linked from the source. This is used to check for conflicts and to know what to remove.
+* `exclude` (Optional) This file can be used to provide source-specific excludes. Supports basic wildcard matching.
+* `dexclude` (Optional) This file can be used to provide destination-specific excludes. Full absolute file path is required.
 
-If the source is a file instead of a directory, the file will be copied to the destination exactly, so make sure the destination path includes the desired filename.
+### Usage
 
 * `update [-f] [<name>]` Copies/links the files, removing any removed from the source. The `-f` option will force overwrite existing files.
-* `info` This file contains the tab-separated configuration parameters source path, destination path, and copy mode (true for copy, false for symbolic links)
-* `list` This file contains a list of files that were copied/linked from the source. This is used to check for conflicts and to know what to remove.
-* `exclude` (Optional) This file can be used to provide source-specific excludes.
 * `status [-o]` Shows if uncommited changes in require sources (if they are git directories). The `-o` option opens directories with changes in a new terminal.
 * `disable [<name>]` Disables a require. Disabled requires will be removed on update, but no information is lost. Se also `remove`. 
 * `enable [<name>]` Re-enables a require.
 * `remove <name>` Permanently removes a require.
 * `all "<command>"` Run a git command on all source git directories
+* `find [--exclude <name>] pattern` Find files matching a pattern. Exclude can be a space separated list of names, provided they are within quotes.
+* `disconnect [--exclude <name>] pattern` Find files matching pattern, then disconnect them from the source.
 
 To see all options, run `git require --help`
 

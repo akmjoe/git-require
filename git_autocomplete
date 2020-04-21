@@ -15,6 +15,20 @@ _git_require ()
    elif [ -n "$(__git_find_on_cmdline status)" ]; then
    	__gitcomp "-o"
    	compopt +o default
+   elif [ -n "$(__git_find_on_cmdline find)" ] || [ -n "$(__git_find_on_cmdline disconnect)" ]; then
+   	if [ -n "$(__git_find_on_cmdline --exclude)" ]; then
+   		if [ "$(__git_count_arguments add)" -eq 0 ]; then
+	   		options=$( compgen -d .git-require/ );
+	   		temp=""
+	   		while IFS=$'\n' read -r line; do
+		    		temp+=" ${line##*/}"
+				done <<< "$options"
+		      __gitcomp "$temp"
+		      compopt +o default
+		   fi
+   	else
+   		__gitcomp "--exclude"
+   	fi
    elif [ -n "$(__git_find_on_cmdline add)" ]; then
    	if [ "$(__git_count_arguments add)" -eq 0 ] && [ -z "$(__git_find_on_cmdline -c)" ] && [ -z "$(__git_find_on_cmdline -d)" ] && [ -z "$(__git_find_on_cmdline hard)" ] && [ -z "$(__git_find_on_cmdline copy)" ]; then
    		__gitcomp "-c -d copy hard"
@@ -22,7 +36,7 @@ _git_require ()
    elif [ -n "$(__git_find_on_cmdline all)" ]; then
    	compopt +o default
    else
-   	__gitcomp "add update remote remove init status enable disable list all"
+   	__gitcomp "add update remote disconnect find remove init status enable disable list all"
    	compopt +o default
    fi
 }

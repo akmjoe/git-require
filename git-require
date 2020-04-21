@@ -223,7 +223,7 @@ list() {
 		if [ -z $f ] || [ $f == "." ]; then
 			continue
 		fi
-		echo "$(echo "$f" | sed -e 's,.\/,,')"
+		echo -e "\e[1m$(echo "$f" | sed -e 's,.\/,,')\e[0m"
 		while IFS=$'\t' read -r from to mode status; do
 			# Looping through file entries
 			if [ "$status" == "true" ]; then
@@ -232,6 +232,88 @@ list() {
 				echo -e "|--$from \e[41mDisabled\e[0m"
 			fi
 		done < ".git-require/$f/info"
+	done
+}
+
+fnd() {
+	pattern=`pwd`"/$1"
+	if [ ! -z "$2" ]; then
+		exclude="$2"
+	else
+		exclude=()
+	fi
+	# Get paths
+	paths=()
+	while IFS= read -r -d $'\0'; do
+	    paths+=("$REPLY")
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	# Loop through paths
+	for f in "${paths[@]}"; do
+		if [ -z $f ] || [ $f == "." ] || [[ " ${exclude[@]} " =~ " $(echo "$f" | sed -e 's,.\/,,') " ]]; then
+			continue
+		fi
+		output=0
+		while read -r file; do
+			# Looping through file entries
+			if [[ $file == $pattern ]]; then
+				# matches pattern
+				if [ $output == 0 ]; then
+					echo -e "\e[1m$(echo "$f" | sed -e 's,.\/,,')\e[0m"
+					output=1
+				fi
+				echo -e "|--$file"
+			fi
+		done < ".git-require/$f/list"
+	done
+}
+
+disconnect() {
+	pattern=`pwd`"/$1"
+	if [ ! -z "$2" ]; then
+		exclude="$2"
+	else
+		exclude=()
+	fi
+	# Get paths
+	paths=()
+	while IFS= read -r -d $'\0'; do
+	    paths+=("$REPLY")
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	# Loop through paths
+	for f in "${paths[@]}"; do
+		if [ -z $f ] || [ $f == "." ] || [[ " ${exclude[@]} " =~ " $(echo "$f" | sed -e 's,.\/,,') " ]]; then
+			continue
+		fi
+		touch ".git-require/$f/tmp-list"
+		output=0
+		while read -r file; do
+			# Looping through file entries
+			if [[ $file == $pattern ]]; then
+				# matches pattern - disconnect
+				if [ $output == 0 ]; then
+					echo -e "\e[1m$(echo "$f" | sed -e 's,.\/,,')\e[0m"
+					output=1
+				fi
+				echo -e "|--$file"
+				cp "$file" "${file}-backup"
+				rm "$file"
+				mv "${file}-backup" "$file"
+				# Now add to exclude
+				if [ ! -f ".git-require/$f/dexclude" ]; then
+					touch ".git-require/$f/dexclude"
+				fi
+				echo "$file" >> ".git-require/$f/dexclude"
+			else
+				# doesn't match pattern, keep in list
+				echo "$file" >> ".git-require/$f/tmp-list"
+			fi
+		done < ".git-require/$f/list"
+		if [ $output != 0 ]; then
+			rm ".git-require/$f/list"
+			mv ".git-require/$f/tmp-list" ".git-require/$f/list"
+		else
+			rm ".git-require/$f/tmp-list"
+		fi
 	done
 }
 
@@ -364,10 +446,19 @@ update() {
 				continue
 			fi
 			echo "Updating $from to $to"
+			# get destination excludes
+			if [ -f ".git-require/$f/dexclude" ]; then
+				IFS=$'\n' read -d '' -r -a dexclude < ".git-require/$f/dexclude"
+			else
+				dexclude=()
+			fi
 			
 			if [ -f $from ]; then
 				# from is a file, direct copy
-				if [ -f $to ]; then
+				if [[ " ${dexclude[@]} " =~ " $to " ]]; then
+					echo "Skipping $to, in dexclude"
+					continue
+				elif [ -f $to ]; then
 					containsElement "$to" "${files[@]}"
 					if [ $? == "1" ] && [ "$1" == "false" ]; then
 						# Not from this require - file conflict. Skip.
@@ -410,6 +501,10 @@ update() {
 			# Loop through files
 			while IFS= read -r -d '' -u 9; do
 				# update file
+				if [[ " ${dexclude[@]} " =~ " $to/$(realpath --relative-to=$from $REPLY) " ]]; then
+					echo "Skipping $to, in dexclude"
+					continue
+				fi
 				if [ -f $to/$(realpath --relative-to=$from $REPLY) ] || [ -d $to/$(realpath --relative-to=$from $REPLY) ]; then
 					# Check if file should exist
 					containsElement "$to/$(realpath --relative-to=$from $REPLY)" "${files[@]}"
@@ -541,6 +636,26 @@ main() {
 			"-l"|"list")
 				list; exit 0
 				;;
+			"find")
+				shift
+				if [ "$1" == "--exclude" ]; then
+					shift
+					exclude="$1"
+					shift
+				fi
+				fnd "$1" "$exclude"
+				exit 0
+				;;
+			"disconnect")
+				shift
+				if [ "$1" == "--exclude" ]; then
+					shift
+					exclude="$1"
+					shift
+				fi
+				disconnect "$1" "$exclude"
+				exit 0
+				;;
 			"-c"|"copy")
 				copy=true
 				;;
@@ -585,9 +700,9 @@ main() {
 			"remote")
 				action="remote"
 				;;
-            "add")
-                action="add"
-                ;;
+         "add")
+            action="add"
+            ;;
 			*)
 				name="$1"
 				shift
