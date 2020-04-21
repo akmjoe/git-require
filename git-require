@@ -77,7 +77,7 @@ all() {
 	checked=()
 	while IFS= read -r -d $'\0'; do
 	    paths+=("$REPLY")
-	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	# save current directory
 	home=$(realpath .)
 	files=()
@@ -123,7 +123,7 @@ status() {
 	checked=()
 	while IFS= read -r -d $'\0'; do
 	    paths+=("$REPLY")
-	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	# save current directory
 	home=$(realpath .)
 	files=()
@@ -184,7 +184,7 @@ able() {
 		paths=()
 		while IFS= read -r -d $'\0'; do
 		    paths+=("$REPLY")
-		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+		done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	fi
 	# Loop through paths
 	for f in "${paths[@]}"; do
@@ -217,7 +217,7 @@ list() {
 	paths=()
 	while IFS= read -r -d $'\0'; do
 	    paths+=("$REPLY")
-	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	# Loop through paths
 	for f in "${paths[@]}"; do
 		if [ -z $f ] || [ $f == "." ]; then
@@ -246,7 +246,7 @@ fnd() {
 	paths=()
 	while IFS= read -r -d $'\0'; do
 	    paths+=("$REPLY")
-	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	# Loop through paths
 	for f in "${paths[@]}"; do
 		if [ -z $f ] || [ $f == "." ] || [[ " ${exclude[@]} " =~ " $(echo "$f" | sed -e 's,.\/,,') " ]]; then
@@ -278,7 +278,7 @@ disconnect() {
 	paths=()
 	while IFS= read -r -d $'\0'; do
 	    paths+=("$REPLY")
-	done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+	done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	# Loop through paths
 	for f in "${paths[@]}"; do
 		if [ -z $f ] || [ $f == "." ] || [[ " ${exclude[@]} " =~ " $(echo "$f" | sed -e 's,.\/,,') " ]]; then
@@ -381,7 +381,7 @@ remote() {
 		paths=()
 		while IFS= read -r -d $'\0'; do
 		    paths+=("$REPLY")
-		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+		done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	fi
 	# Create file for list of files to copy
 	rm ".git-require/remote"
@@ -419,7 +419,7 @@ update() {
 		paths=()
 		while IFS= read -r -d $'\0'; do
 		    paths+=("$REPLY")
-		done < <(cd .git-require && find . -maxdepth 1 -type d -print0)
+		done < <(cd .git-require && find . -maxdepth 1 -type d -print0 | sort -z)
 	fi
 	# clear conflicts file
 	true > ".git-require/conflicts.log"
