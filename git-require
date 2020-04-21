@@ -295,7 +295,7 @@ disconnect() {
 					output=1
 				fi
 				echo -e "|--$file"
-				cp "$file" "${file}-backup"
+				cp -L "$file" "${file}-backup"
 				rm "$file"
 				mv "${file}-backup" "$file"
 				# Now add to exclude
